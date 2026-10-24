@@ -9,3 +9,8 @@ playwright-report/
 .vercel
 *.tsbuildinfo
 .DS_Store
+
+# Claude build helpers (local only)
+.claude-logs/
+.claude-run.sh
+run.command

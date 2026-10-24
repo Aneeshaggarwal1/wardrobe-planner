@@ -27,7 +27,7 @@ test("demo daily loop: wear, wash, iron, wear again", async ({ page }) => {
   await expect(page.locator(`[data-outfit-id="${outfitId}"]`)).toHaveCount(0);
 
   // Shirts have a one-wear limit, so the top is now in the laundry.
-  await page.getByRole("link", { name: "Laundry" }).click();
+  await page.getByRole("link", { name: "Laundry", exact: true }).click();
   await expect(page.getByTestId("group-in_laundry")).not.toContainText("Nothing here");
   await page.getByTestId("laundry-done").click();
   await expect(page.getByTestId("laundry-done")).toBeDisabled();
@@ -35,7 +35,7 @@ test("demo daily loop: wear, wash, iron, wear again", async ({ page }) => {
   await expect(page.getByTestId("all-ironed")).toBeDisabled();
 
   // Everything is ready again; the worn outfit returns to rotation.
-  await page.getByRole("link", { name: "Outfits" }).click();
+  await page.getByRole("link", { name: "Outfits", exact: true }).click();
   await expect(page.locator(`[data-outfit-id="${outfitId}"]`)).toBeVisible();
 
   expect(external).toEqual([]);

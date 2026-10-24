@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getMode } from "@/lib/mode";
@@ -46,21 +47,28 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const mode = getMode();
-    if (mode === null) {
-      router.replace("/");
-      return;
-    }
-    if (mode === "account") {
+    let cancelled = false;
+    async function boot(): Promise<LoadState | null> {
+      const mode = getMode();
+      if (mode === null) {
+        router.replace("/");
+        return null;
+      }
       // The real backend (SupabaseRepo) arrives in phase 4.
-      setState({ kind: "account-pending" });
-      return;
+      if (mode === "account") return { kind: "account-pending" };
+      const repo = new LocalRepo();
+      try {
+        return { kind: "ready", repo, snapshot: await repo.load() };
+      } catch (e) {
+        return { kind: "error", message: e instanceof Error ? e.message : String(e) };
+      }
     }
-    const repo = new LocalRepo();
-    repo
-      .load()
-      .then((snapshot) => setState({ kind: "ready", repo, snapshot }))
-      .catch((e: unknown) => setState({ kind: "error", message: e instanceof Error ? e.message : String(e) }));
+    void boot().then((next) => {
+      if (next && !cancelled) setState(next);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const showToast = useCallback((next: Toast) => {
@@ -120,9 +128,9 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 p-6 text-center">
         <p className="font-medium">Accounts are coming soon</p>
         <p className="text-sm text-muted">Sign-in arrives with the real backend. Try the demo meanwhile.</p>
-        <a className="text-sm underline" href="/">
+        <Link className="text-sm underline" href="/">
           Back
-        </a>
+        </Link>
       </div>
     );
   }
