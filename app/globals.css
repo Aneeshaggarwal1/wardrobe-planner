@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* Clean and minimal: navy ink on warm paper, one restrained accent. */
+@theme {
+  --color-paper: #f6f4ef;
+  --color-card: #ffffff;
+  --color-line: #e4e0d6;
+  --color-ink: #14213d;
+  --color-ink-soft: #2b3a5c;
+  --color-muted: #5f6878;
+  --color-faint: #8d94a1;
+  --color-accent: #b8925a;
+  --color-ready: #2f6b4a;
+  --color-ironing: #a26a12;
+  --color-laundry: #4a5d86;
+  --color-away: #7a7f88;
+  --color-danger: #9b2c2c;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius-card: 14px;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+}
+
+/* Garment art sits on a soft tile so light shirts stay visible. */
+.garment-tile {
+  background: #efece5;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    animation: fade-in 180ms ease-out;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

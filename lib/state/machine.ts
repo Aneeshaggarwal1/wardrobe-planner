@@ -43,6 +43,8 @@ export function wearOutfit(
   outfitId: string,
   now: string,
   wearLogId: string,
+  /** The wearer's local calendar day; defaults to the UTC day of `now`. */
+  today: string = now.slice(0, 10),
 ): WearResult {
   const outfit = snapshot.outfits.find((o) => o.id === outfitId);
   if (!outfit) throw new TransitionError(`Unknown outfit ${outfitId}`);
@@ -65,7 +67,7 @@ export function wearOutfit(
     id: wearLogId,
     user_id: outfit.user_id,
     outfit_id: outfitId,
-    worn_on: now.slice(0, 10),
+    worn_on: today,
     created_at: now,
   };
   return {

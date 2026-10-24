@@ -1,0 +1,22 @@
+{
+  "name": "wardrobe-planner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turns photos of office clothes into a bank of ready-to-wear outfits, so the morning pick is one tap on what is actually clean and ironed.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "seed": "tsx scripts/build-seed.ts && tsx scripts/make-demo-svgs.ts",
+    "icons": "python3 scripts/make-icons.py"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
