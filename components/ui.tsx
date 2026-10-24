@@ -1,6 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes } from "react";
+import { itemName } from "@/lib/state/today";
 import type { Item, ItemState } from "@/lib/types";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -54,7 +55,7 @@ export function GarmentImage({ item, className = "" }: { item: Item; className?:
       {/* eslint-disable-next-line @next/next/no-img-element -- demo SVGs and user photos from signed URLs */}
       <img
         src={item.thumb_url}
-        alt={`${item.primary_color} ${item.subcategory}`}
+        alt={itemName(item)}
         className="h-full w-full object-contain p-2"
         loading="lazy"
       />
@@ -79,6 +80,10 @@ export function SectionTitle({ children, count }: { children: React.ReactNode; c
       {count !== undefined && <span className="font-normal text-faint">{count}</span>}
     </h2>
   );
+}
+
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
 export function capitalise(text: string): string {

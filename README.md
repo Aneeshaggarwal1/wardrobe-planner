@@ -2,7 +2,13 @@
 
 Photograph your office clothes once. AI pairs them into outfits you approve, and each morning the app shows only the outfits whose every piece is washed and ironed. Picking what to wear becomes one tap.
 
-> Status: demo mode complete (phases 1–3). Real accounts, photo tagging and the live deploy come next. A live link, demo GIF and architecture diagram will land here with the deploy.
+> Status: demo mode complete and tested (phases 1–3). Real accounts, AI photo tagging and the live deploy come next.
+
+<p>
+  <img src="docs/screens/1-today.png" width="220" alt="Today: outfits ready to wear" />
+  <img src="docs/screens/5-curate.png" width="220" alt="Curate: approve or reject AI pairings" />
+  <img src="docs/screens/4-laundry.png" width="220" alt="Laundry: bulk wash and ironing state" />
+</p>
 
 ## Try it locally
 

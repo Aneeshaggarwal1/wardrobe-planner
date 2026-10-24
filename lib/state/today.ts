@@ -69,9 +69,17 @@ export interface ClosestOutfit {
   action: string;
 }
 
-/** Plain-language name for an item, e.g. "light blue formal shirt". */
-export function itemName(item: Item): string {
-  return `${item.primary_color} ${item.subcategory}`;
+const PATTERN_WORD: Partial<Record<Item["pattern"], string>> = {
+  stripe: "striped",
+  check: "checked",
+  print: "printed",
+  textured: "textured",
+};
+
+/** Plain-language name for an item, e.g. "light blue formal shirt" or "white striped formal shirt". */
+export function itemName(item: Pick<Item, "primary_color" | "subcategory" | "pattern">): string {
+  const pattern = PATTERN_WORD[item.pattern];
+  return pattern ? `${item.primary_color} ${pattern} ${item.subcategory}` : `${item.primary_color} ${item.subcategory}`;
 }
 
 const ACTION_VERB: Record<Exclude<ItemState, "ready">, string> = {
@@ -82,8 +90,9 @@ const ACTION_VERB: Record<Exclude<ItemState, "ready">, string> = {
 
 /**
  * For the "nothing fully ready" empty state: approved outfits blocked by
- * exactly one item, with the action that unblocks each. Ironing first (the
- * quickest fix), then the most-worn outfits.
+ * exactly one item, with the action that unblocks each. One entry per blocking
+ * item (fixing it may unblock several outfits). Ironing first (the quickest
+ * fix), then the most-worn outfits.
  */
 export function closestOutfits(snapshot: WardrobeSnapshot, limit = 3): ClosestOutfit[] {
   const itemsById = new Map(snapshot.items.map((i) => [i.id, i]));
@@ -100,6 +109,7 @@ export function closestOutfits(snapshot: WardrobeSnapshot, limit = 3): ClosestOu
     result.push({ outfit, blocking, action: `${verb} ${itemName(blocking)}` });
   }
   const priority: Record<ItemState, number> = { needs_ironing: 0, in_laundry: 1, unavailable: 2, ready: 3 };
+  const seen = new Set<string>();
   return result
     .sort(
       (a, b) =>
@@ -107,5 +117,6 @@ export function closestOutfits(snapshot: WardrobeSnapshot, limit = 3): ClosestOu
         b.outfit.times_worn - a.outfit.times_worn ||
         a.outfit.id.localeCompare(b.outfit.id),
     )
+    .filter((c) => !seen.has(c.blocking.id) && seen.add(c.blocking.id))
     .slice(0, limit);
 }

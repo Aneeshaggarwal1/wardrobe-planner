@@ -1,8 +1,9 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { Button, GarmentImage, SectionTitle, StateBadge, capitalise } from "@/components/ui";
+import { Button, GarmentImage, SectionTitle, StateBadge, capitalise, plural } from "@/components/ui";
 import { useWardrobe } from "@/components/WardrobeProvider";
+import { itemName } from "@/lib/state/today";
 import type { Item, ItemState } from "@/lib/types";
 
 const GROUPS: Array<{ state: ItemState; title: string }> = [
@@ -24,21 +25,21 @@ export default function LaundryPage() {
         <Button
           data-testid="laundry-done"
           disabled={busy || inLaundry.length === 0}
-          onClick={() => void run((r) => r.laundryDone(), { message: `${inLaundry.length} items back from the wash` })}
+          onClick={() => void run((r) => r.laundryDone(), { message: `${plural(inLaundry.length, "item")} back from the wash` })}
           className="flex-col gap-0.5 py-3"
         >
           Laundry done
-          <span className="text-xs font-normal opacity-75">{inLaundry.length} items</span>
+          <span className="text-xs font-normal opacity-75">{plural(inLaundry.length, "item")}</span>
         </Button>
         <Button
           data-testid="all-ironed"
           variant="secondary"
           disabled={busy || toIron.length === 0}
-          onClick={() => void run((r) => r.ironed(), { message: `${toIron.length} items ironed` })}
+          onClick={() => void run((r) => r.ironed(), { message: `${plural(toIron.length, "item")} ironed` })}
           className="flex-col gap-0.5 py-3"
         >
           All ironed
-          <span className="text-xs font-normal text-muted">{toIron.length} items</span>
+          <span className="text-xs font-normal text-muted">{plural(toIron.length, "item")}</span>
         </Button>
       </div>
       <p className="mt-2 text-xs text-faint">
@@ -49,7 +50,7 @@ export default function LaundryPage() {
         const items = byState(state);
         if (items.length === 0 && state === "unavailable") return null;
         return (
-          <section key={state} data-testid={`group-${state}`}>
+          <section key={state} data-testid={`group-${state}`} className="mt-6">
             <SectionTitle count={items.length}>{title}</SectionTitle>
             {items.length === 0 ? (
               <p className="text-sm text-faint">Nothing here.</p>
@@ -69,7 +70,7 @@ export default function LaundryPage() {
 
 function LaundryRow({ item }: { item: Item }) {
   const { run, busy } = useWardrobe();
-  const name = capitalise(`${item.primary_color} ${item.subcategory}`);
+  const name = capitalise(itemName(item));
   return (
     <li className="flex items-center gap-3 rounded-xl border border-line bg-card p-2 pr-3" data-item-id={item.id}>
       <GarmentImage item={item} className="h-12 w-12 shrink-0" />

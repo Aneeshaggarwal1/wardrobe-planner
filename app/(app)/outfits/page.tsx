@@ -8,6 +8,7 @@ import { Sheet } from "@/components/Sheet";
 import { Button, EmptyState, GarmentImage, capitalise } from "@/components/ui";
 import { useWardrobe } from "@/components/WardrobeProvider";
 import { isWearable } from "@/lib/state/machine";
+import { itemName } from "@/lib/state/today";
 import type { Item } from "@/lib/types";
 
 type Filter = "available" | "all";
@@ -113,7 +114,7 @@ function Picker({ title, items, value, onPick }: { title: string; items: Item[];
             key={i.id}
             onClick={() => onPick(i.id)}
             aria-pressed={value === i.id}
-            aria-label={`${i.primary_color} ${i.subcategory}`}
+            aria-label={itemName(i)}
             className={`shrink-0 rounded-xl ${value === i.id ? "ring-2 ring-ink ring-offset-2 ring-offset-paper" : ""}`}
           >
             <GarmentImage item={i} className="h-20 w-20" />
@@ -138,7 +139,7 @@ function CreateOutfit({ onDone }: { onDone: () => void }) {
       <Picker title="Top" items={tops} value={topId} onPick={setTopId} />
       <Picker title="Bottom" items={bottoms} value={bottomId} onPick={setBottomId} />
       <p className="mb-3 min-h-5 text-sm text-muted">
-        {top && bottom ? `${capitalise(top.primary_color)} ${top.subcategory} with ${bottom.primary_color} ${bottom.subcategory}` : "Pick a top and a bottom."}
+        {top && bottom ? `${capitalise(itemName(top))} with ${itemName(bottom)}` : "Pick a top and a bottom."}
       </p>
       <Button
         className="w-full"

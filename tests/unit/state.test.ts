@@ -7,7 +7,7 @@ import {
   undoWear,
   wearOutfit,
 } from "../../lib/state/machine";
-import { closestOutfits, rankToday, wearableOutfits } from "../../lib/state/today";
+import { closestOutfits, itemName, rankToday, wearableOutfits } from "../../lib/state/today";
 import type { WardrobeSnapshot } from "../../lib/types";
 import { loadSeed, makeItem, makeOutfit } from "./fixtures";
 
@@ -178,6 +178,20 @@ describe("closest outfits (empty state)", () => {
     const closest = closestOutfits(s);
     expect(closest.length).toBeGreaterThan(0);
     expect(closest[0]!.action).toMatch(/^Iron the (white|light blue) formal shirt$/);
+  });
+
+  it("lists each blocking item once, even when it blocks several outfits", () => {
+    let s = wardrobe();
+    s = { ...s, items: s.items.map((i) => (i.id === "shirt2" ? { ...i, state: "needs_ironing" as const } : i)) };
+    s = { ...s, outfits: s.outfits.filter((o) => o.top_id === "shirt2") };
+    expect(s.outfits).toHaveLength(2);
+    expect(closestOutfits(s).map((c) => c.blocking.id)).toEqual(["shirt2"]);
+  });
+
+  it("names patterns so similar shirts can be told apart", () => {
+    const striped = makeItem({ id: "x", primary_color: "white", pattern: "stripe" });
+    expect(itemName(striped)).toBe("white striped formal shirt");
+    expect(itemName(makeItem({ id: "y" }))).toBe("white formal shirt");
   });
 
   it("skips outfits blocked by more than one item", () => {

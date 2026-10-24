@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PALETTE_HEX } from "@/lib/pairing/colors-hex";
 import { PALETTE, type PaletteColor } from "@/lib/pairing/palette";
 import type { ItemPatch } from "@/lib/repo/types";
+import { itemName } from "@/lib/state/today";
 import type { Category, Item, Pattern } from "@/lib/types";
 import { Button, GarmentImage, capitalise } from "./ui";
 
@@ -111,7 +112,7 @@ export function ItemEditor({
       <div className="mb-4 flex items-center gap-3">
         <GarmentImage item={item} className="h-20 w-20 shrink-0" />
         <p className="text-sm text-muted">
-          {capitalise(`${v.primary_color} ${v.subcategory}`)}
+          {capitalise(itemName(v))}
           <br />
           Fix anything the tagger got wrong; pairing uses these tags.
         </p>

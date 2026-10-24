@@ -1,6 +1,7 @@
 "use client";
 
 import { lastWornLabel } from "@/lib/dates";
+import { itemName } from "@/lib/state/today";
 import type { Item, Outfit } from "@/lib/types";
 import { GarmentImage, StateBadge, capitalise } from "./ui";
 
@@ -28,12 +29,12 @@ export function OutfitCard({
       <div className="grid grid-cols-2 gap-2">
         <figure>
           <GarmentImage item={top} className="aspect-square" />
-          <figcaption className="mt-1.5 text-xs text-muted">{capitalise(`${top.primary_color} ${top.subcategory}`)}</figcaption>
+          <figcaption className="mt-1.5 text-xs text-muted">{capitalise(itemName(top))}</figcaption>
           {showStates && <div className="mt-1"><StateBadge state={top.state} /></div>}
         </figure>
         <figure>
           <GarmentImage item={bottom} className="aspect-square" />
-          <figcaption className="mt-1.5 text-xs text-muted">{capitalise(`${bottom.primary_color} ${bottom.subcategory}`)}</figcaption>
+          <figcaption className="mt-1.5 text-xs text-muted">{capitalise(itemName(bottom))}</figcaption>
           {showStates && <div className="mt-1"><StateBadge state={bottom.state} /></div>}
         </figure>
       </div>

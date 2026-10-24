@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Button, EmptyState, GarmentImage, capitalise } from "@/components/ui";
 import { useWardrobe } from "@/components/WardrobeProvider";
+import { itemName } from "@/lib/state/today";
 import type { Decision } from "@/lib/types";
 
 const SWIPE_PX = 80;
@@ -77,7 +78,7 @@ export default function CuratePage() {
             </div>
             <p className="mt-3 text-base font-semibold">{current.reason}</p>
             <p className="mt-0.5 text-sm text-muted">
-              {capitalise(`${top.primary_color} ${top.subcategory}`)} with {bottom.primary_color} {bottom.subcategory}
+              {capitalise(itemName(top))} with {itemName(bottom)}
             </p>
             <p className="mt-1 text-xs text-faint">Match score {Math.round(current.score)}/100</p>
           </article>

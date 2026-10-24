@@ -5,7 +5,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ItemEditor } from "@/components/ItemEditor";
 import { Sheet } from "@/components/Sheet";
-import { Button, GarmentImage, SectionTitle, StateBadge, capitalise } from "@/components/ui";
+import { Button, GarmentImage, SectionTitle, StateBadge, capitalise, plural } from "@/components/ui";
 import { useWardrobe } from "@/components/WardrobeProvider";
 import { itemName } from "@/lib/state/today";
 import type { Category, Item } from "@/lib/types";
@@ -42,7 +42,7 @@ export default function WardrobePage() {
         const items = snapshot.items.filter((i) => categories.includes(i.category));
         if (items.length === 0) return null;
         return (
-          <section key={title}>
+          <section key={title} className="mt-6 first-of-type:mt-4">
             <SectionTitle count={items.length}>{title}</SectionTitle>
             <ul className="grid grid-cols-2 gap-2">
               {items.map((item) => (
@@ -55,7 +55,7 @@ export default function WardrobePage() {
                     <p className="mt-1.5 truncate text-sm font-medium">{capitalise(itemName(item))}</p>
                     <div className="mt-1 flex items-center justify-between">
                       <StateBadge state={item.state} />
-                      <span className="text-[11px] text-faint">{outfitCount(item.id)} outfits</span>
+                      <span className="text-[11px] text-faint">{plural(outfitCount(item.id), "outfit")}</span>
                     </div>
                   </button>
                 </li>
