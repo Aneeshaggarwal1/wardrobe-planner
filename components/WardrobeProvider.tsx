@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { getMode } from "@/lib/mode";
+import { getMode, setMode } from "@/lib/mode";
 import { LocalRepo } from "@/lib/repo/local";
+import { ApiError, SupabaseRepo } from "@/lib/repo/supabase";
+import { browserSupabase } from "@/lib/supabase/browser";
 import type { WardrobeRepo } from "@/lib/repo/types";
 import type { Item, WardrobeSnapshot } from "@/lib/types";
 
@@ -23,6 +25,8 @@ interface WardrobeContextValue {
   /** Run a repo mutation; the returned snapshot replaces the current one. */
   run: (action: (repo: WardrobeRepo) => Promise<WardrobeSnapshot>, toast?: Toast) => Promise<boolean>;
   showToast: (toast: Toast) => void;
+  /** Replace the snapshot directly (the upload screen gets one back per tagged photo). */
+  setSnapshot: (snapshot: WardrobeSnapshot) => void;
 }
 
 const WardrobeContext = createContext<WardrobeContextValue | null>(null);
@@ -50,16 +54,31 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function boot(): Promise<LoadState | null> {
       const mode = getMode();
-      if (mode === null) {
-        router.replace("/");
-        return null;
+      let repo: WardrobeRepo;
+      if (mode === "demo") {
+        repo = new LocalRepo();
+      } else {
+        // Account mode, or just back from a sign-in link (no mode stored yet).
+        const sb = browserSupabase();
+        if (!sb) {
+          if (mode === null) router.replace("/");
+          return mode === null ? null : { kind: "account-pending" };
+        }
+        const { data } = await sb.auth.getUser();
+        if (!data.user) {
+          router.replace(mode === "account" ? "/login" : "/");
+          return null;
+        }
+        setMode("account");
+        repo = new SupabaseRepo();
       }
-      // The real backend (SupabaseRepo) arrives in phase 4.
-      if (mode === "account") return { kind: "account-pending" };
-      const repo = new LocalRepo();
       try {
         return { kind: "ready", repo, snapshot: await repo.load() };
       } catch (e) {
+        if (e instanceof ApiError && e.status === 401) {
+          router.replace("/login");
+          return null;
+        }
         return { kind: "error", message: e instanceof Error ? e.message : String(e) };
       }
     }
@@ -70,6 +89,21 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [router]);
+
+  // Signed photo URLs last an hour: refresh when the app comes back to the foreground.
+  useEffect(() => {
+    if (state.kind !== "ready" || !(state.repo instanceof SupabaseRepo)) return;
+    const repo = state.repo;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !repo.isStale()) return;
+      repo
+        .load()
+        .then((snapshot) => setState({ kind: "ready", repo, snapshot }))
+        .catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [state]);
 
   const showToast = useCallback((next: Toast) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -96,6 +130,10 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
     [state, showToast],
   );
 
+  const setSnapshot = useCallback((snapshot: WardrobeSnapshot) => {
+    setState((s) => (s.kind === "ready" ? { ...s, snapshot } : s));
+  }, []);
+
   const value = useMemo<WardrobeContextValue | null>(() => {
     if (state.kind !== "ready") return null;
     return {
@@ -106,8 +144,9 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
       busy,
       run,
       showToast,
+      setSnapshot,
     };
-  }, [state, busy, run, showToast]);
+  }, [state, busy, run, showToast, setSnapshot]);
 
   if (state.kind === "loading") {
     return <div className="flex min-h-dvh items-center justify-center text-sm text-muted">Loading your wardrobe…</div>;
@@ -126,8 +165,8 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
   if (state.kind === "account-pending") {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="font-medium">Accounts are coming soon</p>
-        <p className="text-sm text-muted">Sign-in arrives with the real backend. Try the demo meanwhile.</p>
+        <p className="font-medium">Accounts aren&apos;t set up here</p>
+        <p className="text-sm text-muted">This copy of the app has no Supabase settings. Try the demo meanwhile.</p>
         <Link className="text-sm underline" href="/">
           Back
         </Link>

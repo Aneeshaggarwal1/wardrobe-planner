@@ -1,14 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
-import { setMode } from "@/lib/mode";
+import { getMode, setMode } from "@/lib/mode";
 import { LocalRepo } from "@/lib/repo/local";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export default function Landing() {
   const router = useRouter();
   const [resetDone, setResetDone] = useState(false);
+  const accounts = isSupabaseConfigured();
+
+  // Signed-in users go straight to their wardrobe.
+  useEffect(() => {
+    if (getMode() === "account") router.replace("/today");
+  }, [router]);
 
   const tryDemo = () => {
     setMode("demo");
@@ -57,9 +64,11 @@ export default function Landing() {
         <Button onClick={tryDemo} className="py-3.5 text-base" data-testid="try-demo">
           Try the demo
         </Button>
-        <Button variant="secondary" disabled title="Arrives with the real backend">
-          Sign in with Google
-        </Button>
+        {accounts && (
+          <Button variant="secondary" onClick={() => router.push("/login")} data-testid="sign-in">
+            Sign in to your wardrobe
+          </Button>
+        )}
         <p className="text-center text-xs text-faint">
           The demo uses a sample wardrobe stored in this browser. No sign-up, nothing sent anywhere.
         </p>

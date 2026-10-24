@@ -1,9 +1,12 @@
-import type { Item, ItemState, Outfit, WardrobeSnapshot, WearLog } from "../types";
+import type { Item, ItemState, Outfit, WardrobeSnapshot, WearLog, WearUndo } from "../types";
+
+export type { WearUndo };
 
 /**
  * Item state machine. Every function is pure: it takes a snapshot and returns
- * a new one, never mutating its input. The server runs the same rules inside a
- * Postgres transaction; demo mode runs these directly.
+ * a new one, never mutating its input. Demo mode runs these in the browser;
+ * with an account the server runs the same functions and commits the result
+ * to Postgres in one transaction (see lib/ops.ts and wp_commit).
  *
  *   ready ──wear (limit reached)──▶ in_laundry ──laundry done──▶ needs_ironing ──ironed──▶ ready
  *     ▲  └─wear (under limit)─┘                    └─(no ironing needed)──────────────────▶ ┘
@@ -11,13 +14,6 @@ import type { Item, ItemState, Outfit, WardrobeSnapshot, WearLog } from "../type
  */
 
 export class TransitionError extends Error {}
-
-export interface WearUndo {
-  wearLogId: string;
-  worn_on: string;
-  previousItems: Item[];
-  previousOutfit: Outfit;
-}
 
 export interface WearResult {
   snapshot: WardrobeSnapshot;
@@ -53,7 +49,9 @@ export function wearOutfit(
   if (!isWearable(outfit, itemsById)) throw new TransitionError("Every item must be ready to wear");
 
   const ids = new Set(outfitItemIds(outfit));
-  const previousItems = snapshot.items.filter((i) => ids.has(i.id));
+  const previousItems = snapshot.items
+    .filter((i) => ids.has(i.id))
+    .map(({ id, state, wears_since_wash, last_worn_at }) => ({ id, state, wears_since_wash, last_worn_at }));
   const items = snapshot.items.map((item) => {
     if (!ids.has(item.id)) return item;
     const wears = item.wears_since_wash + 1;
@@ -72,7 +70,12 @@ export function wearOutfit(
   };
   return {
     snapshot: { ...snapshot, items, outfits, wearLogs: [...snapshot.wearLogs, log] },
-    undo: { wearLogId, worn_on: log.worn_on, previousItems, previousOutfit: outfit },
+    undo: {
+      wearLogId,
+      worn_on: log.worn_on,
+      previousItems,
+      previousOutfit: { id: outfit.id, times_worn: outfit.times_worn, last_worn_at: outfit.last_worn_at },
+    },
   };
 }
 
@@ -82,11 +85,18 @@ export function undoWear(snapshot: WardrobeSnapshot, undo: WearUndo, today: stri
   if (!snapshot.wearLogs.some((l) => l.id === undo.wearLogId)) {
     throw new TransitionError("That wear has already been undone");
   }
+  // Restore only what the wear changed, so tag edits made since are kept.
   const restore = new Map(undo.previousItems.map((i) => [i.id, i]));
+  const prevOutfit = undo.previousOutfit;
   return {
     ...snapshot,
-    items: snapshot.items.map((i) => restore.get(i.id) ?? i),
-    outfits: snapshot.outfits.map((o) => (o.id === undo.previousOutfit.id ? undo.previousOutfit : o)),
+    items: snapshot.items.map((i) => {
+      const prev = restore.get(i.id);
+      return prev ? { ...i, ...prev } : i;
+    }),
+    outfits: snapshot.outfits.map((o) =>
+      o.id === prevOutfit.id ? { ...o, times_worn: prevOutfit.times_worn, last_worn_at: prevOutfit.last_worn_at } : o,
+    ),
     wearLogs: snapshot.wearLogs.filter((l) => l.id !== undo.wearLogId),
   };
 }

@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ItemEditor } from "@/components/ItemEditor";
 import { Sheet } from "@/components/Sheet";
-import { Button, GarmentImage, SectionTitle, StateBadge, capitalise, plural } from "@/components/ui";
+import { Button, EmptyState, GarmentImage, SectionTitle, StateBadge, capitalise, plural } from "@/components/ui";
 import { useWardrobe } from "@/components/WardrobeProvider";
+import { setMode } from "@/lib/mode";
+import { SupabaseRepo } from "@/lib/repo/supabase";
 import { itemName } from "@/lib/state/today";
+import { browserSupabase } from "@/lib/supabase/browser";
 import type { Category, Item } from "@/lib/types";
 
 const SECTIONS: Array<{ title: string; categories: Category[] }> = [
@@ -65,10 +69,41 @@ export default function WardrobePage() {
         );
       })}
 
+      {snapshot.items.length === 0 && (
+        <EmptyState title="No clothes yet" body="Photograph your office clothes and AI tags each one.">
+          <Link href="/upload" className="text-sm font-semibold underline">
+            Add your first items
+          </Link>
+        </EmptyState>
+      )}
+
+      <SessionFooter />
+
       <Sheet open={!!open} title={open ? capitalise(itemName(open)) : ""} onClose={() => setOpenId(null)}>
         {open && <ItemDetail item={open} onClose={() => setOpenId(null)} />}
       </Sheet>
     </AppShell>
+  );
+}
+
+/** Sign out (account) or leave the demo. */
+function SessionFooter() {
+  const { isDemo } = useWardrobe();
+  const router = useRouter();
+  const leave = async () => {
+    if (!isDemo) {
+      await browserSupabase()?.auth.signOut();
+      SupabaseRepo.clearCache();
+    }
+    setMode(null);
+    router.replace("/");
+  };
+  return (
+    <div className="mt-10 text-center">
+      <button className="text-sm text-muted underline underline-offset-2" onClick={() => void leave()} data-testid="sign-out">
+        {isDemo ? "Leave the demo" : "Sign out"}
+      </button>
+    </div>
   );
 }
 

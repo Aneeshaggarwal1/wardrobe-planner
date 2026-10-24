@@ -16,8 +16,12 @@ export type Decision = "approve" | "reject";
 export interface Item {
   id: string;
   user_id: string;
+  /** Display URLs: a static path in demo mode, a short-lived signed URL with an account. */
   image_url: string;
   thumb_url: string;
+  /** Storage paths in the private bucket (account mode only). */
+  image_path?: string | null;
+  thumb_path?: string | null;
   category: Category;
   subcategory: string;
   primary_color: PaletteColor;
@@ -50,6 +54,14 @@ export interface Outfit {
   last_worn_at: string | null;
 }
 
+/** What "Undo" needs to put back after a wear. */
+export interface WearUndo {
+  wearLogId: string;
+  worn_on: string;
+  previousItems: Array<Pick<Item, "id" | "state" | "wears_since_wash" | "last_worn_at">>;
+  previousOutfit: Pick<Outfit, "id" | "times_worn" | "last_worn_at">;
+}
+
 export interface WearLog {
   id: string;
   user_id: string;
@@ -57,6 +69,8 @@ export interface WearLog {
   /** Calendar day, YYYY-MM-DD */
   worn_on: string;
   created_at: string;
+  /** Present on the day's latest wear so it can be undone. */
+  undo?: WearUndo | null;
 }
 
 /**

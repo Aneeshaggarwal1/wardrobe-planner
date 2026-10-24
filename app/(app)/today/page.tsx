@@ -69,7 +69,16 @@ export default function TodayPage() {
         </div>
       )}
 
-      {bankSize === 0 ? (
+      {snapshot.items.length === 0 ? (
+        <EmptyState
+          title="Let's set up your wardrobe"
+          body="Photograph 15–25 office pieces, one per photo. AI tags them and pairs them into outfits for you to approve."
+        >
+          <Link href="/upload" className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">
+            Add your clothes
+          </Link>
+        </EmptyState>
+      ) : bankSize === 0 ? (
         <EmptyState title="No outfits yet" body="Approve a few AI-paired outfits and they'll show up here each morning.">
           <Link href="/curate" className="text-sm font-semibold underline">
             Find outfits

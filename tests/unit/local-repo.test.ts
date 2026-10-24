@@ -56,13 +56,15 @@ describe("LocalRepo (demo mode)", () => {
     expect(after.feedback).toHaveLength(1);
   });
 
-  it("deleting an item retires outfits that use it", async () => {
+  it("deleting an item removes the outfits and wear history that use it", async () => {
     const r = repo();
     const s = await r.load();
     const used = s.outfits[0]!.top_id;
     const after = await r.deleteItem(used);
     expect(after.items.some((i) => i.id === used)).toBe(false);
-    for (const o of after.outfits.filter((x) => x.top_id === used)) expect(o.status).toBe("rejected");
+    expect(after.outfits.some((o) => o.top_id === used || o.bottom_id === used)).toBe(false);
+    const outfitIds = new Set(after.outfits.map((o) => o.id));
+    for (const log of after.wearLogs) expect(outfitIds.has(log.outfit_id)).toBe(true);
   });
 
   it("a manual outfit is approved and counts as an approve signal", async () => {
