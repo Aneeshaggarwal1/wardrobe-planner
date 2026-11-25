@@ -117,7 +117,8 @@ export function BackupPanel() {
           className="text-muted underline underline-offset-2"
           onClick={() => {
             setMode("demo");
-            location.assign("/today");
+            // A full reload, so the app opens the demo's storage instead of yours.
+            window.location.href = "/today";
           }}
         >
           Look at the demo

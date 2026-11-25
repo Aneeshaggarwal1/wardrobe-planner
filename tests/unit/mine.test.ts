@@ -60,6 +60,24 @@ describe("your wardrobe on this device", () => {
     expect(reloaded.items.map((i) => i.id)).toEqual(["i1"]);
   });
 
+  it("keeps every item when several are added at the same moment", async () => {
+    const store = memoryStore();
+    const repo = mine(store);
+    await repo.load();
+    const ids = ["a", "b", "c", "d"];
+    await Promise.all(ids.map((id) => repo.addItem(itemFromTags(id, TAGS, "data:x", "2026-11-25T00:00:00.000Z"))));
+    expect((await repo.load()).items.map((i) => i.id).sort()).toEqual(ids);
+    expect((await mine(store).load()).items.map((i) => i.id).sort()).toEqual(ids);
+  });
+
+  it("a failed change doesn't block the next one", async () => {
+    const repo = mine();
+    await repo.load();
+    await expect(repo.deleteItem("missing")).rejects.toThrow();
+    await repo.addItem(itemFromTags("ok", TAGS, "data:x", "2026-11-25T00:00:00.000Z"));
+    expect((await repo.load()).items.map((i) => i.id)).toEqual(["ok"]);
+  });
+
   it("generate uses the re-ranker when given, and records whether the AI was used", async () => {
     const seed = loadSeed();
     const repo = new LocalRepo({

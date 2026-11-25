@@ -37,6 +37,8 @@ export class LocalRepo implements WardrobeRepo {
   readonly kind: "demo" | "mine";
   private snapshot: WardrobeSnapshot | null = null;
   private generated: GenerateInfo | null = null;
+  /** Changes run one at a time, so two photos tagged at once can't overwrite each other. */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: LocalRepoOptions) {
     this.kind = options.kind;
@@ -50,13 +52,21 @@ export class LocalRepo implements WardrobeRepo {
     return this.snapshot;
   }
 
+  /** Run `task` after every change already queued has finished. */
+  private exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(task, task);
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
   private async save(next: WardrobeSnapshot): Promise<WardrobeSnapshot> {
     await this.options.store.set(next);
     this.snapshot = next;
     return next;
   }
 
-  private async apply(op: Op): Promise<WardrobeSnapshot> {
+  /** Apply one op to the latest saved snapshot. Call only inside `exclusive`. */
+  private async applyNow(op: Op): Promise<WardrobeSnapshot> {
     const current = this.snapshot ?? (await this.load());
     const next = applyOp(current, op, {
       userId: this.kind,
@@ -65,6 +75,10 @@ export class LocalRepo implements WardrobeRepo {
       newId,
     });
     return this.save(next);
+  }
+
+  private apply(op: Op): Promise<WardrobeSnapshot> {
+    return this.exclusive(() => this.applyNow(op));
   }
 
   wear(outfitId: string) {
@@ -95,15 +109,17 @@ export class LocalRepo implements WardrobeRepo {
     return this.apply({ type: "deleteItem", itemId });
   }
 
-  async generate() {
-    const current = this.snapshot ?? (await this.load());
-    const pool = ruleCandidates(current, 30);
-    const { candidates, usedModel } = this.options.rerank
-      ? await this.options.rerank(pool, current.items, 20)
-      : { candidates: pool.slice(0, 20), usedModel: false };
-    const next = await this.apply({ type: "addCandidates", candidates });
-    this.generated = { added: next.outfits.length - current.outfits.length, usedModel };
-    return next;
+  generate() {
+    return this.exclusive(async () => {
+      const current = this.snapshot ?? (await this.load());
+      const pool = ruleCandidates(current, 30);
+      const { candidates, usedModel } = this.options.rerank
+        ? await this.options.rerank(pool, current.items, 20)
+        : { candidates: pool.slice(0, 20), usedModel: false };
+      const next = await this.applyNow({ type: "addCandidates", candidates });
+      this.generated = { added: next.outfits.length - current.outfits.length, usedModel };
+      return next;
+    });
   }
   lastGenerate(): GenerateInfo | null {
     return this.generated;
@@ -120,13 +136,15 @@ export class LocalRepo implements WardrobeRepo {
   }
 
   replaceAll(snapshot: WardrobeSnapshot) {
-    return this.save(snapshot);
+    return this.exclusive(() => this.save(snapshot));
   }
 
-  async reset(): Promise<WardrobeSnapshot> {
-    await this.options.store.set(null);
-    this.snapshot = null;
-    return this.load();
+  reset(): Promise<WardrobeSnapshot> {
+    return this.exclusive(async () => {
+      await this.options.store.set(null);
+      this.snapshot = null;
+      return this.load();
+    });
   }
 }
 

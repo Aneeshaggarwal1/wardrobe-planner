@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractJson, type MessagesClient } from "../../lib/ai/client";
 import { requestRanking } from "../../lib/ai/rerank";
-import { applyRanking, toRankItem } from "../../lib/pairing/ranking";
+import { toRankItem } from "../../lib/pairing/ranking";
 import { TagError, parseTagReply, tagImage } from "../../lib/ai/tag";
 import { ruleCandidates } from "../../lib/ops";
 import { loadSeed } from "./fixtures";
