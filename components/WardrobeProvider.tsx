@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { getMode, setMode } from "@/lib/mode";
-import { LocalRepo } from "@/lib/repo/local";
-import { ApiError, SupabaseRepo } from "@/lib/repo/supabase";
-import { browserSupabase } from "@/lib/supabase/browser";
+import { getMode } from "@/lib/mode";
+import { demoRepo } from "@/lib/repo/local";
+import { mineRepo } from "@/lib/repo/mine";
 import type { WardrobeRepo } from "@/lib/repo/types";
+import { requestPersistentStorage } from "@/lib/store";
 import type { Item, WardrobeSnapshot } from "@/lib/types";
 
 export interface Toast {
@@ -21,11 +20,12 @@ interface WardrobeContextValue {
   snapshot: WardrobeSnapshot;
   itemsById: ReadonlyMap<string, Item>;
   isDemo: boolean;
+  isMine: boolean;
   busy: boolean;
   /** Run a repo mutation; the returned snapshot replaces the current one. */
   run: (action: (repo: WardrobeRepo) => Promise<WardrobeSnapshot>, toast?: Toast) => Promise<boolean>;
   showToast: (toast: Toast) => void;
-  /** Replace the snapshot directly (the upload screen gets one back per tagged photo). */
+  /** Replace the snapshot directly (the upload screen adds items one by one). */
   setSnapshot: (snapshot: WardrobeSnapshot) => void;
 }
 
@@ -40,8 +40,7 @@ export function useWardrobe(): WardrobeContextValue {
 type LoadState =
   | { kind: "loading" }
   | { kind: "ready"; repo: WardrobeRepo; snapshot: WardrobeSnapshot }
-  | { kind: "error"; message: string }
-  | { kind: "account-pending" };
+  | { kind: "error"; message: string };
 
 export function WardrobeProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -54,31 +53,16 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function boot(): Promise<LoadState | null> {
       const mode = getMode();
-      let repo: WardrobeRepo;
-      if (mode === "demo") {
-        repo = new LocalRepo();
-      } else {
-        // Account mode, or just back from a sign-in link (no mode stored yet).
-        const sb = browserSupabase();
-        if (!sb) {
-          if (mode === null) router.replace("/");
-          return mode === null ? null : { kind: "account-pending" };
-        }
-        const { data } = await sb.auth.getUser();
-        if (!data.user) {
-          router.replace(mode === "account" ? "/login" : "/");
-          return null;
-        }
-        setMode("account");
-        repo = new SupabaseRepo();
+      if (mode === null) {
+        router.replace("/");
+        return null;
       }
+      const repo = mode === "mine" ? mineRepo() : demoRepo();
+      // Ask the browser to keep your wardrobe even when the phone is short of space.
+      if (mode === "mine") void requestPersistentStorage();
       try {
         return { kind: "ready", repo, snapshot: await repo.load() };
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) {
-          router.replace("/login");
-          return null;
-        }
         return { kind: "error", message: e instanceof Error ? e.message : String(e) };
       }
     }
@@ -89,21 +73,6 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [router]);
-
-  // Signed photo URLs last an hour: refresh when the app comes back to the foreground.
-  useEffect(() => {
-    if (state.kind !== "ready" || !(state.repo instanceof SupabaseRepo)) return;
-    const repo = state.repo;
-    const onVisible = () => {
-      if (document.visibilityState !== "visible" || !repo.isStale()) return;
-      repo
-        .load()
-        .then((snapshot) => setState({ kind: "ready", repo, snapshot }))
-        .catch(() => undefined);
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [state]);
 
   const showToast = useCallback((next: Toast) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -141,6 +110,7 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
       snapshot: state.snapshot,
       itemsById: new Map(state.snapshot.items.map((i) => [i.id, i])),
       isDemo: state.repo.kind === "demo",
+      isMine: state.repo.kind === "mine",
       busy,
       run,
       showToast,
@@ -162,18 +132,6 @@ export function WardrobeProvider({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (state.kind === "account-pending") {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="font-medium">Accounts aren&apos;t set up here</p>
-        <p className="text-sm text-muted">This copy of the app has no Supabase settings. Try the demo meanwhile.</p>
-        <Link className="text-sm underline" href="/">
-          Back
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <WardrobeContext.Provider value={value}>
       {children}

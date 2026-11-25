@@ -1,12 +1,16 @@
-/** Which backend the app is using. Set on the Landing screen. */
-export type AppMode = "demo" | "account";
+/**
+ * Which wardrobe the app is showing:
+ * - "demo": the sample wardrobe, seeded from public/demo/seed.json
+ * - "mine": your own clothes, stored only on this device
+ */
+export type AppMode = "demo" | "mine";
 
 const KEY = "wp-mode";
 
 export function getMode(): AppMode | null {
   try {
     const value = window.localStorage.getItem(KEY);
-    return value === "demo" || value === "account" ? value : null;
+    return value === "demo" || value === "mine" ? value : null;
   } catch {
     return null;
   }

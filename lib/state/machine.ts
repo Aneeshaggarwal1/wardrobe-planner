@@ -4,9 +4,8 @@ export type { WearUndo };
 
 /**
  * Item state machine. Every function is pure: it takes a snapshot and returns
- * a new one, never mutating its input. Demo mode runs these in the browser;
- * with an account the server runs the same functions and commits the result
- * to Postgres in one transaction (see lib/ops.ts and wp_commit).
+ * a new one, never mutating its input. lib/ops.ts wraps them as the app's
+ * operations.
  *
  *   ready ──wear (limit reached)──▶ in_laundry ──laundry done──▶ needs_ironing ──ironed──▶ ready
  *     ▲  └─wear (under limit)─┘                    └─(no ironing needed)──────────────────▶ ┘

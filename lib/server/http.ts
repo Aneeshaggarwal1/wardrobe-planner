@@ -1,14 +1,8 @@
 import { ZodError } from "zod";
 import { TransitionError } from "../state/machine";
+import { HttpError } from "./errors";
 
-export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { HttpError };
 
 /** Map any thrown error to a JSON response with a message safe to show the user. */
 export function errorResponse(e: unknown): Response {
@@ -27,10 +21,4 @@ export async function readBody(req: Request): Promise<unknown> {
   } catch {
     throw new HttpError(400, "Invalid JSON");
   }
-}
-
-/** The user's local calendar day, sent by the app so "today" matches their timezone. */
-export function localDayFrom(req: Request): string {
-  const day = req.headers.get("x-local-day") ?? "";
-  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : new Date().toISOString().slice(0, 10);
 }

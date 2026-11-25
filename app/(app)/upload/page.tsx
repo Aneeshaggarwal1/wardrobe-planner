@@ -3,19 +3,19 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { PasscodeForm } from "@/components/PasscodeForm";
 import { Button, EmptyState, capitalise, plural } from "@/components/ui";
 import { useWardrobe } from "@/components/WardrobeProvider";
-import { mapLimit, resizeToJpeg } from "@/lib/image";
+import { AiError, getPasscode, setPasscode, tagPhoto } from "@/lib/client/ai";
+import { blobToBase64, blobToDataUrl, mapLimit, resizeToJpeg } from "@/lib/image";
+import { itemFromTags } from "@/lib/items";
 import { newId } from "@/lib/repo/local";
-import { SupabaseRepo } from "@/lib/repo/supabase";
 import { itemName } from "@/lib/state/today";
-import { browserSupabase } from "@/lib/supabase/browser";
-import { BUCKET, photoPaths } from "@/lib/supabase/env";
-import type { Item, WardrobeSnapshot } from "@/lib/types";
+import type { Item } from "@/lib/types";
 
 type Status =
   | { kind: "waiting" }
-  | { kind: "uploading" }
+  | { kind: "preparing" }
   | { kind: "tagging" }
   | { kind: "done"; item: Item; flagged: boolean }
   | { kind: "error"; message: string };
@@ -28,11 +28,11 @@ interface Entry {
   status: Status;
 }
 
-const CONCURRENCY = 3;
+const CONCURRENCY = 2;
 
 export default function UploadPage() {
   const { isDemo } = useWardrobe();
-  return <AppShell title="Add items">{isDemo ? <DemoUpload /> : <AccountUpload />}</AppShell>;
+  return <AppShell title="Add items">{isDemo ? <DemoUpload /> : <MineUpload />}</AppShell>;
 }
 
 function Picker({ onPick, disabled }: { onPick: (files: File[]) => void; disabled?: boolean }) {
@@ -41,7 +41,7 @@ function Picker({ onPick, disabled }: { onPick: (files: File[]) => void; disable
       className={`flex cursor-pointer flex-col items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-ink/25 bg-card px-4 py-8 text-center ${disabled ? "pointer-events-none opacity-50" : ""}`}
     >
       <span className="text-sm font-semibold">Choose photos or take them now</span>
-      <span className="text-xs text-faint">One item per photo · resized on your phone before upload</span>
+      <span className="text-xs text-faint">One item per photo · resized on your phone before tagging</span>
       <input
         type="file"
         accept="image/*"
@@ -83,8 +83,8 @@ function DemoUpload() {
           </ul>
           <div className="mt-4">
             <EmptyState
-              title="Photo tagging needs an account"
-              body="In demo mode nothing leaves your phone, so new photos can't be tagged by AI. The sample wardrobe shows what tagging produces."
+              title="The demo doesn't tag photos"
+              body="Set up your own wardrobe to have AI tag your clothes. The sample wardrobe shows what tagging produces."
             >
               <Link href="/review" className="text-sm font-semibold underline">
                 See the sample wardrobe&apos;s tags
@@ -97,10 +97,12 @@ function DemoUpload() {
   );
 }
 
-function AccountUpload() {
+function MineUpload() {
   const { repo, setSnapshot } = useWardrobe();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [running, setRunning] = useState(false);
+  const [hasPasscode, setHasPasscode] = useState(() => !!getPasscode());
+  const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const stopped = useRef(false);
   const previews = useRef<string[]>([]);
 
@@ -114,12 +116,7 @@ function AccountUpload() {
     setEntries((list) => list.map((e) => (e.key === key ? { ...e, status } : e)));
 
   const start = async (files: File[]) => {
-    const sb = browserSupabase();
-    if (!sb || files.length === 0) return;
-    const { data } = await sb.auth.getUser();
-    const userId = data.user?.id;
-    if (!userId) return;
-
+    if (files.length === 0) return;
     const fresh: Entry[] = files.map((file) => ({
       key: newId(),
       name: file.name,
@@ -133,37 +130,26 @@ function AccountUpload() {
     stopped.current = false;
 
     await mapLimit(fresh, CONCURRENCY, async (entry) => {
-      if (stopped.current) return update(entry.key, { kind: "error", message: "Not uploaded (stopped)" });
-      const id = newId();
-      const paths = photoPaths(userId, id);
+      if (stopped.current) return update(entry.key, { kind: "error", message: "Not tagged (stopped)" });
       try {
-        update(entry.key, { kind: "uploading" });
-        const [image, thumb] = await Promise.all([resizeToJpeg(entry.file, 1200), resizeToJpeg(entry.file, 400)]);
-        const store = sb.storage.from(BUCKET);
-        const up = await Promise.all([
-          store.upload(paths.image, image, { contentType: "image/jpeg" }),
-          store.upload(paths.thumb, thumb, { contentType: "image/jpeg" }),
-        ]);
-        const failed = up.find((r) => r.error);
-        if (failed?.error) throw new Error(`Upload failed: ${failed.error.message}`);
+        update(entry.key, { kind: "preparing" });
+        const [forAi, thumb] = await Promise.all([resizeToJpeg(entry.file, 1200), resizeToJpeg(entry.file, 400, 0.75)]);
+        const [base64, thumbUrl] = await Promise.all([blobToBase64(forAi), blobToDataUrl(thumb)]);
 
         update(entry.key, { kind: "tagging" });
-        const res = await fetch("/api/items", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        });
-        const body = (await res.json().catch(() => ({}))) as {
-          snapshot?: WardrobeSnapshot;
-          item?: Item;
-          error?: string;
-        };
-        if (res.status === 429) stopped.current = true;
-        if (!res.ok || !body.snapshot || !body.item) throw new Error(body.error ?? `Tagging failed (${res.status})`);
-        const snapshot = repo instanceof SupabaseRepo ? repo.adopt(body.snapshot) : body.snapshot;
-        setSnapshot(snapshot);
-        update(entry.key, { kind: "done", item: body.item, flagged: !body.item.tags_confirmed });
+        const tags = await tagPhoto(base64);
+        const item = itemFromTags(newId(), tags, thumbUrl, new Date().toISOString());
+        setSnapshot(await repo.addItem(item));
+        update(entry.key, { kind: "done", item, flagged: !item.tags_confirmed });
       } catch (e) {
+        if (e instanceof AiError && (e.status === 401 || e.status === 503 || e.status === 429)) {
+          stopped.current = true;
+          if (e.status === 401) {
+            setPasscode(null);
+            setHasPasscode(false);
+            setPasscodeError("That passcode didn't work. Enter it again, then re-add the photos.");
+          }
+        }
         update(entry.key, { kind: "error", message: e instanceof Error ? e.message : "Something went wrong" });
       }
     });
@@ -177,12 +163,22 @@ function AccountUpload() {
   return (
     <>
       <Tips />
-      <Picker onPick={(files) => void start(files)} disabled={running} />
+      {!hasPasscode && !running ? (
+        <PasscodeForm
+          error={passcodeError}
+          onSaved={() => {
+            setPasscodeError(null);
+            setHasPasscode(true);
+          }}
+        />
+      ) : (
+        <Picker onPick={(files) => void start(files)} disabled={running} />
+      )}
 
       {entries.length > 0 && (
         <>
           <p className="mb-2 mt-5 text-sm text-muted" aria-live="polite">
-            {running ? "Uploading and tagging… keep this screen open." : `${plural(done.length, "item")} added`}
+            {running ? "Tagging… keep this screen open." : `${plural(done.length, "item")} added`}
             {errors.length > 0 && ` · ${errors.length} skipped`}
             {flagged > 0 && ` · ${flagged} to check`}
           </p>
@@ -221,14 +217,16 @@ function StatusLine({ status, name }: { status: Status; name: string }) {
   switch (status.kind) {
     case "waiting":
       return <p className="truncate text-faint">Waiting · {name}</p>;
-    case "uploading":
-      return <p className="truncate text-muted">Uploading…</p>;
+    case "preparing":
+      return <p className="truncate text-muted">Resizing…</p>;
     case "tagging":
       return <p className="truncate text-muted">Reading the photo…</p>;
     case "done":
       return (
         <>
-          <p className="truncate font-medium">{capitalise(itemName(status.item))}</p>
+          <p className="truncate font-medium" data-testid="tagged-name">
+            {capitalise(itemName(status.item))}
+          </p>
           <p className={`text-xs ${status.flagged ? "text-ironing" : "text-faint"}`}>
             {status.flagged ? "Not sure about this one: check its tags" : `Formality ${status.item.formality}/5`}
           </p>

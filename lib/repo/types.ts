@@ -22,13 +22,19 @@ export interface LastWear {
   worn_on: string;
 }
 
+/** What the last "generate" did, so the screen can say whether the AI was used. */
+export interface GenerateInfo {
+  added: number;
+  usedModel: boolean;
+}
+
 /**
- * The only way screens touch data. LocalRepo serves demo mode from
- * localStorage; SupabaseRepo (phase 4) calls the API routes. Every mutation
- * resolves to the full, updated snapshot so screens simply re-render.
+ * The only way screens touch data. Both the demo and your own wardrobe are
+ * served by LocalRepo, from storage on this device. Every mutation resolves to
+ * the full, updated snapshot so screens simply re-render.
  */
 export interface WardrobeRepo {
-  readonly kind: "demo" | "supabase";
+  readonly kind: "demo" | "mine";
   load(): Promise<WardrobeSnapshot>;
 
   // Daily loop
@@ -40,15 +46,19 @@ export interface WardrobeRepo {
   setUnavailable(itemId: string, unavailable: boolean): Promise<WardrobeSnapshot>;
 
   // Wardrobe
+  addItem(item: Item): Promise<WardrobeSnapshot>;
   updateItem(itemId: string, patch: ItemPatch): Promise<WardrobeSnapshot>;
   deleteItem(itemId: string): Promise<WardrobeSnapshot>;
 
   // Outfits
   generate(): Promise<WardrobeSnapshot>;
+  lastGenerate(): GenerateInfo | null;
   feedback(outfitId: string, decision: Decision): Promise<WardrobeSnapshot>;
   createOutfit(topId: string, bottomId: string): Promise<WardrobeSnapshot>;
   removeOutfit(outfitId: string): Promise<WardrobeSnapshot>;
 
-  /** Demo only: restore the seed wardrobe. */
-  reset?(): Promise<WardrobeSnapshot>;
+  /** Replace everything (restore from a backup file). */
+  replaceAll(snapshot: WardrobeSnapshot): Promise<WardrobeSnapshot>;
+  /** Demo: restore the seed. Yours: start empty. */
+  reset(): Promise<WardrobeSnapshot>;
 }

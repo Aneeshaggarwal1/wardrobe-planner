@@ -1,6 +1,6 @@
 /**
  * Core domain types. These mirror the database tables in
- * supabase/migrations/0001_init.sql and the demo seed in public/demo/seed.json.
+ * demo seed in public/demo/seed.json and the backup file format (lib/backup.ts).
  * Dates are ISO strings: timestamps as full ISO, calendar days as YYYY-MM-DD.
  */
 
@@ -16,10 +16,10 @@ export type Decision = "approve" | "reject";
 export interface Item {
   id: string;
   user_id: string;
-  /** Display URLs: a static path in demo mode, a short-lived signed URL with an account. */
+  /** Display URLs: a static path in demo mode; a data: URL thumbnail for your own photos. */
   image_url: string;
   thumb_url: string;
-  /** Storage paths in the private bucket (account mode only). */
+  /** Storage paths, used only by the cloud backend kept on the supabase-backend branch. */
   image_path?: string | null;
   thumb_path?: string | null;
   category: Category;

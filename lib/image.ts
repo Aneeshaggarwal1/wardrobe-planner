@@ -36,3 +36,19 @@ export async function mapLimit<T>(inputs: readonly T[], limit: number, task: (in
   };
   await Promise.all(Array.from({ length: Math.min(limit, inputs.length) }, worker));
 }
+
+/** A blob as a data: URL (used to keep thumbnails inside the saved wardrobe). */
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Couldn't read the image"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** A blob as bare base64 (no data: prefix), for sending to the tagging endpoint. */
+export async function blobToBase64(blob: Blob): Promise<string> {
+  const url = await blobToDataUrl(blob);
+  return url.slice(url.indexOf(",") + 1);
+}

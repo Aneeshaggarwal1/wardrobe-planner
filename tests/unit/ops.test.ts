@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { diffSnapshots, isEmptyDiff } from "../../lib/diff";
 import { applyOp, lastWear, ruleCandidates, type OpContext } from "../../lib/ops";
 import { TransitionError } from "../../lib/state/machine";
 import { wearableOutfits } from "../../lib/state/today";
@@ -75,44 +74,5 @@ describe("applyOp", () => {
   it("addItem refuses a duplicate id", () => {
     const seed = loadSeed();
     expect(() => applyOp(seed, { type: "addItem", item: seed.items[0]! }, ctx())).toThrow(TransitionError);
-  });
-});
-
-describe("diffSnapshots", () => {
-  it("is empty when nothing changed", () => {
-    const seed = loadSeed();
-    expect(isEmptyDiff(diffSnapshots(seed, seed))).toBe(true);
-  });
-
-  it("captures exactly the rows a wear touches", () => {
-    const seed = loadSeed();
-    const outfit = wearableOutfits(seed)[0]!;
-    const after = applyOp(seed, { type: "wear", outfitId: outfit.id }, ctx());
-    const d = diffSnapshots(seed, after);
-    expect(d.upsert_items.map((i) => i.id).sort()).toEqual([outfit.top_id, outfit.bottom_id].sort());
-    expect(d.upsert_outfits.map((o) => o.id)).toEqual([outfit.id]);
-    expect(d.insert_wear_logs).toHaveLength(1);
-    expect(d.delete_items).toEqual([]);
-    expect(d.update_wear_logs).toEqual([]);
-  });
-
-  it("a second wear clears the first log's undo payload", () => {
-    const seed = loadSeed();
-    const [a, b] = wearableOutfits(seed);
-    const once = applyOp(seed, { type: "wear", outfitId: a!.id }, ctx());
-    const twice = applyOp(once, { type: "wear", outfitId: b!.id }, { ...ctx(), newId: () => "second" });
-    const d = diffSnapshots(once, twice);
-    expect(d.update_wear_logs).toHaveLength(1);
-    expect(d.update_wear_logs[0]!.undo).toBeNull();
-  });
-
-  it("a delete lists the item, its outfits and their logs", () => {
-    const seed = loadSeed();
-    const itemId = seed.outfits[0]!.top_id;
-    const after = applyOp(seed, { type: "deleteItem", itemId }, ctx());
-    const d = diffSnapshots(seed, after);
-    expect(d.delete_items).toEqual([itemId]);
-    const gone = seed.outfits.filter((o) => o.top_id === itemId).map((o) => o.id);
-    expect(d.delete_outfits.sort()).toEqual(gone.sort());
   });
 });

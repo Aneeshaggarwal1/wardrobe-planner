@@ -11,7 +11,7 @@ import type { Decision } from "@/lib/types";
 const SWIPE_PX = 80;
 
 export default function CuratePage() {
-  const { snapshot, itemsById, run, busy } = useWardrobe();
+  const { snapshot, itemsById, run, busy, repo, isMine, showToast } = useWardrobe();
   const [skipped, setSkipped] = useState<string[]>([]);
   const [dx, setDx] = useState(0);
   const startX = useRef<number | null>(null);
@@ -34,7 +34,14 @@ export default function CuratePage() {
     setDx(0);
     setSkipped((s) => [...s.filter((id) => id !== current.id), current.id]);
   };
-  const generate = () => run((r) => r.generate(), { message: "New outfits ready to review" });
+  const generate = async () => {
+    const ok = await run((r) => r.generate());
+    const info = repo.lastGenerate();
+    if (!ok || !info) return;
+    if (info.added === 0) showToast({ message: "No new pairings: add more clothes for more combinations" });
+    else if (isMine && !info.usedModel) showToast({ message: `${info.added} new outfits (AI stylist unavailable, ranked by rules)` });
+    else showToast({ message: `${info.added} new outfits ready to review` });
+  };
 
   return (
     <AppShell

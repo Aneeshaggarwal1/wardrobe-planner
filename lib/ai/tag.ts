@@ -38,8 +38,6 @@ export type Tags = z.infer<typeof tagSchema> & {
   fit: Fit | null;
 };
 
-/** Below this, the item is flagged for the user to check in Tag review. */
-export const CONFIDENCE_THRESHOLD = 0.7;
 
 export class TagError extends Error {
   constructor(

@@ -5,10 +5,10 @@ import { TransitionError, ironed, laundryDone, setUnavailable, undoWear, wearOut
 import type { Decision, Item, Outfit, PairFeedback, WardrobeSnapshot, WearLog } from "./types";
 
 /**
- * Every change a user can make, as data. The same `applyOp` runs in the
- * browser for demo mode (LocalRepo) and on the server for accounts, where the
- * before/after snapshots are diffed and committed in one transaction. One set
- * of rules, tested once.
+ * Every change a user can make, as data: one pure function from snapshot to
+ * snapshot. It serves the demo and your own wardrobe alike (LocalRepo), and a
+ * cloud backend could run the same function server-side (see the
+ * supabase-backend branch). One set of rules, tested once.
  */
 export type Op =
   | { type: "wear"; outfitId: string }

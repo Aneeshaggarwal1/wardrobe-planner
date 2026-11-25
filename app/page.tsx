@@ -4,26 +4,24 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { getMode, setMode } from "@/lib/mode";
-import { LocalRepo } from "@/lib/repo/local";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { demoRepo } from "@/lib/repo/local";
 
 export default function Landing() {
   const router = useRouter();
   const [resetDone, setResetDone] = useState(false);
-  const accounts = isSupabaseConfigured();
 
-  // Signed-in users go straight to their wardrobe.
+  // Once you've started your own wardrobe, the app opens straight on Today.
   useEffect(() => {
-    if (getMode() === "account") router.replace("/today");
+    if (getMode() === "mine") router.replace("/today");
   }, [router]);
 
-  const tryDemo = () => {
-    setMode("demo");
+  const open = (mode: "demo" | "mine") => {
+    setMode(mode);
     router.push("/today");
   };
 
   const resetDemo = async () => {
-    await new LocalRepo().reset();
+    await demoRepo().reset();
     setResetDone(true);
   };
 
@@ -61,16 +59,15 @@ export default function Landing() {
       </div>
 
       <div className="mt-auto flex flex-col gap-3 pt-10">
-        <Button onClick={tryDemo} className="py-3.5 text-base" data-testid="try-demo">
+        <Button onClick={() => open("mine")} className="py-3.5 text-base" data-testid="start-mine">
+          Set up my wardrobe
+        </Button>
+        <Button variant="secondary" onClick={() => open("demo")} data-testid="try-demo">
           Try the demo
         </Button>
-        {accounts && (
-          <Button variant="secondary" onClick={() => router.push("/login")} data-testid="sign-in">
-            Sign in to your wardrobe
-          </Button>
-        )}
         <p className="text-center text-xs text-faint">
-          The demo uses a sample wardrobe stored in this browser. No sign-up, nothing sent anywhere.
+          No sign-up. Your wardrobe stays on this phone; photos are sent to the AI only to be tagged, and aren&apos;t
+          stored.
         </p>
         <button onClick={resetDemo} className="text-center text-xs text-muted underline underline-offset-2">
           {resetDone ? "Demo reset to the sample wardrobe" : "Reset demo"}

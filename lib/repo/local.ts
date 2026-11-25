@@ -1,10 +1,9 @@
 import { localDay } from "../dates";
 import { applyOp, lastWear, ruleCandidates, type Op } from "../ops";
-import type { Decision, WardrobeSnapshot } from "../types";
-import type { ItemPatch, LastWear, WardrobeRepo } from "./types";
-
-const SNAPSHOT_KEY = "wp-demo-snapshot-v1";
-const SEED_URL = "/demo/seed.json";
+import type { Candidate } from "../pairing/generate";
+import { localStorageStore, type SnapshotStore } from "../store";
+import type { Decision, Item, WardrobeSnapshot } from "../types";
+import type { GenerateInfo, ItemPatch, LastWear, WardrobeRepo } from "./types";
 
 export function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -12,52 +11,60 @@ export function newId(): string {
     : `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function readJson<T>(key: string): T | null {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    return null;
-  }
-}
+export const EMPTY_SNAPSHOT: WardrobeSnapshot = { items: [], outfits: [], wearLogs: [], feedback: [] };
 
-function writeJson(key: string, value: unknown): void {
-  try {
-    if (value === null) window.localStorage.removeItem(key);
-    else window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Private mode or storage full: the demo still works for this session.
-  }
+export type Reranker = (
+  pool: readonly Candidate[],
+  items: readonly Item[],
+  keep: number,
+) => Promise<{ candidates: Candidate[]; usedModel: boolean }>;
+
+export interface LocalRepoOptions {
+  kind: "demo" | "mine";
+  store: SnapshotStore;
+  /** The wardrobe to start from when the store is empty. */
+  seed: () => Promise<WardrobeSnapshot>;
+  /** Optional AI re-rank for "generate"; without it the rule order is used. */
+  rerank?: Reranker;
 }
 
 /**
- * Demo-mode repository: the whole wardrobe lives in localStorage, seeded from
- * public/demo/seed.json. Never calls Supabase or the Claude API.
+ * Keeps a wardrobe on this device and applies the same rules everywhere
+ * (lib/ops.ts). Serves both the demo (localStorage, seeded) and your own
+ * wardrobe (IndexedDB, starts empty). Never sends your wardrobe anywhere.
  */
 export class LocalRepo implements WardrobeRepo {
-  readonly kind = "demo" as const;
+  readonly kind: "demo" | "mine";
   private snapshot: WardrobeSnapshot | null = null;
+  private generated: GenerateInfo | null = null;
 
-  constructor(private readonly fetchSeed: () => Promise<WardrobeSnapshot> = defaultFetchSeed) {}
+  constructor(private readonly options: LocalRepoOptions) {
+    this.kind = options.kind;
+  }
 
   async load(): Promise<WardrobeSnapshot> {
     if (this.snapshot) return this.snapshot;
-    this.snapshot = readJson<WardrobeSnapshot>(SNAPSHOT_KEY) ?? (await this.fetchSeed());
-    writeJson(SNAPSHOT_KEY, this.snapshot);
+    const stored = await this.options.store.get();
+    this.snapshot = stored ?? (await this.options.seed());
+    if (!stored) await this.options.store.set(this.snapshot);
     return this.snapshot;
+  }
+
+  private async save(next: WardrobeSnapshot): Promise<WardrobeSnapshot> {
+    await this.options.store.set(next);
+    this.snapshot = next;
+    return next;
   }
 
   private async apply(op: Op): Promise<WardrobeSnapshot> {
     const current = this.snapshot ?? (await this.load());
     const next = applyOp(current, op, {
-      userId: "demo",
+      userId: this.kind,
       now: new Date().toISOString(),
       today: localDay(),
       newId,
     });
-    this.snapshot = next;
-    writeJson(SNAPSHOT_KEY, next);
-    return next;
+    return this.save(next);
   }
 
   wear(outfitId: string) {
@@ -78,16 +85,30 @@ export class LocalRepo implements WardrobeRepo {
   setUnavailable(itemId: string, unavailable: boolean) {
     return this.apply({ type: "setUnavailable", itemId, unavailable });
   }
+  addItem(item: Item) {
+    return this.apply({ type: "addItem", item });
+  }
   updateItem(itemId: string, patch: ItemPatch) {
     return this.apply({ type: "updateItem", itemId, patch });
   }
   deleteItem(itemId: string) {
     return this.apply({ type: "deleteItem", itemId });
   }
+
   async generate() {
     const current = this.snapshot ?? (await this.load());
-    return this.apply({ type: "addCandidates", candidates: ruleCandidates(current, 20) });
+    const pool = ruleCandidates(current, 30);
+    const { candidates, usedModel } = this.options.rerank
+      ? await this.options.rerank(pool, current.items, 20)
+      : { candidates: pool.slice(0, 20), usedModel: false };
+    const next = await this.apply({ type: "addCandidates", candidates });
+    this.generated = { added: next.outfits.length - current.outfits.length, usedModel };
+    return next;
   }
+  lastGenerate(): GenerateInfo | null {
+    return this.generated;
+  }
+
   feedback(outfitId: string, decision: Decision) {
     return this.apply({ type: "feedback", outfitId, decision });
   }
@@ -98,20 +119,26 @@ export class LocalRepo implements WardrobeRepo {
     return this.apply({ type: "removeOutfit", outfitId });
   }
 
+  replaceAll(snapshot: WardrobeSnapshot) {
+    return this.save(snapshot);
+  }
+
   async reset(): Promise<WardrobeSnapshot> {
-    writeJson(SNAPSHOT_KEY, null);
-    try {
-      window.localStorage.removeItem("wp-demo-undo-v1"); // pre-phase-4 key
-    } catch {
-      // ignore
-    }
+    await this.options.store.set(null);
     this.snapshot = null;
     return this.load();
   }
 }
 
-async function defaultFetchSeed(): Promise<WardrobeSnapshot> {
-  const res = await fetch(SEED_URL, { cache: "no-store" });
+const DEMO_KEY = "wp-demo-snapshot-v1";
+
+async function fetchDemoSeed(): Promise<WardrobeSnapshot> {
+  const res = await fetch("/demo/seed.json", { cache: "no-store" });
   if (!res.ok) throw new Error(`Could not load the demo wardrobe (${res.status})`);
   return (await res.json()) as WardrobeSnapshot;
+}
+
+/** The sample wardrobe: localStorage, seeded from public/demo/seed.json, rules only. */
+export function demoRepo(): LocalRepo {
+  return new LocalRepo({ kind: "demo", store: localStorageStore(DEMO_KEY), seed: fetchDemoSeed });
 }

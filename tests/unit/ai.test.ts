@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractJson, type MessagesClient } from "../../lib/ai/client";
-import { applyRanking, rerank } from "../../lib/ai/rerank";
+import { requestRanking } from "../../lib/ai/rerank";
+import { applyRanking, toRankItem } from "../../lib/pairing/ranking";
 import { TagError, parseTagReply, tagImage } from "../../lib/ai/tag";
 import { ruleCandidates } from "../../lib/ops";
 import { loadSeed } from "./fixtures";
@@ -89,47 +90,23 @@ describe("tagImage", () => {
   });
 });
 
-describe("rerank", () => {
+describe("requestRanking", () => {
   const seed = loadSeed();
-  const items = new Map(seed.items.map((i) => [i.id, i]));
+  const items = new Map(seed.items.map((i) => [i.id, toRankItem(i)]));
   const pool = ruleCandidates(seed, 30);
 
-  it("follows the model's order and keeps its reasons", async () => {
-    const reply = JSON.stringify({
-      ranking: [
-        { i: 3, reason: "Soft blue lifts the beige" },
-        { i: 0, reason: "Sharp, classic and safe" },
-      ],
-    });
-    const { candidates, usedModel } = await rerank(fakeClient(reply), "m", pool, items, 5);
-    expect(usedModel).toBe(true);
-    expect(candidates).toHaveLength(5);
-    expect(candidates[0]).toMatchObject({ top_id: pool[3]!.top_id, reason: "Soft blue lifts the beige" });
-    expect(candidates[1]).toMatchObject({ top_id: pool[0]!.top_id, reason: "Sharp, classic and safe" });
+  it("returns the model's ranking", async () => {
+    const reply = JSON.stringify({ ranking: [{ i: 3, reason: "Soft blue lifts the beige" }] });
+    expect(await requestRanking(fakeClient(reply), "m", pool, items, 5)).toEqual([{ i: 3, reason: "Soft blue lifts the beige" }]);
   });
 
-  it("falls back to rule order when the model errors", async () => {
-    const { candidates, usedModel } = await rerank(fakeClient(new Error("timeout")), "m", pool, items, 20);
-    expect(usedModel).toBe(false);
-    expect(candidates).toEqual(pool.slice(0, 20));
+  it("drops indices outside the pool", async () => {
+    const reply = JSON.stringify({ ranking: [{ i: 99, reason: "Not a real pair" }, { i: 1, reason: "Real pair here" }] });
+    expect(await requestRanking(fakeClient(reply), "m", pool, items, 5)).toEqual([{ i: 1, reason: "Real pair here" }]);
   });
 
-  it("falls back when there is no client", async () => {
-    const { usedModel } = await rerank(null, "m", pool, items, 20);
-    expect(usedModel).toBe(false);
-  });
-
-  it("ignores bad indices and duplicates; replaces over-long reasons", () => {
-    const merged = applyRanking(
-      pool,
-      [
-        { i: 999, reason: "out of range" },
-        { i: 2, reason: "one two three four five six seven eight nine ten eleven twelve thirteen" },
-        { i: 2, reason: "duplicate" },
-      ],
-      3,
-    );
-    expect(merged[0]).toEqual(pool[2]);
-    expect(merged.slice(1)).toEqual([pool[0], pool[1]]);
+  it("returns null when the model errors or replies badly", async () => {
+    expect(await requestRanking(fakeClient(new Error("timeout")), "m", pool, items, 5)).toBeNull();
+    expect(await requestRanking(fakeClient("nonsense"), "m", pool, items, 5)).toBeNull();
   });
 });

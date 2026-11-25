@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { LocalRepo } from "../../lib/repo/local";
+import { localStorageStore } from "../../lib/store";
 import { wearableOutfits } from "../../lib/state/today";
 import { loadSeed } from "./fixtures";
 
@@ -21,7 +22,7 @@ beforeEach(() => {
   (globalThis as unknown as { window: { localStorage: MemoryStorage } }).window = { localStorage: new MemoryStorage() };
 });
 
-const repo = () => new LocalRepo(async () => loadSeed());
+const repo = () => new LocalRepo({ kind: "demo", store: localStorageStore("demo"), seed: async () => loadSeed() });
 
 describe("LocalRepo (demo mode)", () => {
   it("loads the seed and persists changes across instances", async () => {
